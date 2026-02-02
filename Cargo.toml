@@ -1,0 +1,26 @@
+[package]
+name = "feynman"
+version = "0.1.0"
+edition = "2021"
+authors = ["Alex J Perkins"]
+description = "A stochastic teacher CLI using Feynman techniques for deep learning"
+license = "MIT"
+repository = "https://github.com/alexjperkins/feynman"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+dirs = "5.0"
+thiserror = "1.0"
+
+[[bin]]
+name = "feynman"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+strip = true

@@ -1,0 +1,24 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Database (local dev)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+.env.local
