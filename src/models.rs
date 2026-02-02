@@ -1,3 +1,6 @@
+// Many types and methods are public API for the Claude skill integration but not used by CLI/TUI yet
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,7 +150,7 @@ impl SessionOutcome {
         }
     }
 
-    pub fn to_review_outcome(&self) -> Option<ReviewOutcome> {
+    pub fn to_review_outcome(self) -> Option<ReviewOutcome> {
         match self {
             SessionOutcome::Success => Some(ReviewOutcome::Success),
             SessionOutcome::Partial => Some(ReviewOutcome::Partial),
@@ -319,7 +322,8 @@ impl InterviewCategory {
             "scope" => Some(InterviewCategory::Scope),
             "dependencies" => Some(InterviewCategory::Dependencies),
             "risks" => Some(InterviewCategory::Risks),
-            "other" | _ => Some(InterviewCategory::Other),
+            "other" => Some(InterviewCategory::Other),
+            _ => Some(InterviewCategory::Other),
         }
     }
 }
@@ -458,7 +462,11 @@ mod tests {
     mod progress_tests {
         use super::*;
 
-        fn make_progress(mastery_level: i32, times_reviewed: i32, times_succeeded: i32) -> Progress {
+        fn make_progress(
+            mastery_level: i32,
+            times_reviewed: i32,
+            times_succeeded: i32,
+        ) -> Progress {
             Progress {
                 id: 1,
                 topic_id: 1,
@@ -723,7 +731,10 @@ mod tests {
             assert_eq!(SkillLevel::from_str("unknown"), Some(SkillLevel::Unknown));
             assert_eq!(SkillLevel::from_str("novice"), Some(SkillLevel::Novice));
             assert_eq!(SkillLevel::from_str("beginner"), Some(SkillLevel::Beginner));
-            assert_eq!(SkillLevel::from_str("intermediate"), Some(SkillLevel::Intermediate));
+            assert_eq!(
+                SkillLevel::from_str("intermediate"),
+                Some(SkillLevel::Intermediate)
+            );
             assert_eq!(SkillLevel::from_str("advanced"), Some(SkillLevel::Advanced));
             assert_eq!(SkillLevel::from_str("expert"), Some(SkillLevel::Expert));
         }
@@ -755,14 +766,20 @@ mod tests {
         fn from_str_valid_inputs() {
             assert_eq!(SessionType::from_str("feynman"), Some(SessionType::Feynman));
             assert_eq!(SessionType::from_str("f"), Some(SessionType::Feynman));
-            assert_eq!(SessionType::from_str("socratic"), Some(SessionType::Socratic));
+            assert_eq!(
+                SessionType::from_str("socratic"),
+                Some(SessionType::Socratic)
+            );
             assert_eq!(SessionType::from_str("s"), Some(SessionType::Socratic));
         }
 
         #[test]
         fn from_str_case_insensitive() {
             assert_eq!(SessionType::from_str("FEYNMAN"), Some(SessionType::Feynman));
-            assert_eq!(SessionType::from_str("Socratic"), Some(SessionType::Socratic));
+            assert_eq!(
+                SessionType::from_str("Socratic"),
+                Some(SessionType::Socratic)
+            );
         }
 
         #[test]
@@ -791,19 +808,40 @@ mod tests {
 
         #[test]
         fn from_str_valid_inputs() {
-            assert_eq!(SessionOutcome::from_str("success"), Some(SessionOutcome::Success));
+            assert_eq!(
+                SessionOutcome::from_str("success"),
+                Some(SessionOutcome::Success)
+            );
             assert_eq!(SessionOutcome::from_str("s"), Some(SessionOutcome::Success));
-            assert_eq!(SessionOutcome::from_str("partial"), Some(SessionOutcome::Partial));
+            assert_eq!(
+                SessionOutcome::from_str("partial"),
+                Some(SessionOutcome::Partial)
+            );
             assert_eq!(SessionOutcome::from_str("fail"), Some(SessionOutcome::Fail));
-            assert_eq!(SessionOutcome::from_str("abandoned"), Some(SessionOutcome::Abandoned));
-            assert_eq!(SessionOutcome::from_str("quit"), Some(SessionOutcome::Abandoned));
+            assert_eq!(
+                SessionOutcome::from_str("abandoned"),
+                Some(SessionOutcome::Abandoned)
+            );
+            assert_eq!(
+                SessionOutcome::from_str("quit"),
+                Some(SessionOutcome::Abandoned)
+            );
         }
 
         #[test]
         fn to_review_outcome_converts_correctly() {
-            assert_eq!(SessionOutcome::Success.to_review_outcome(), Some(ReviewOutcome::Success));
-            assert_eq!(SessionOutcome::Partial.to_review_outcome(), Some(ReviewOutcome::Partial));
-            assert_eq!(SessionOutcome::Fail.to_review_outcome(), Some(ReviewOutcome::Fail));
+            assert_eq!(
+                SessionOutcome::Success.to_review_outcome(),
+                Some(ReviewOutcome::Success)
+            );
+            assert_eq!(
+                SessionOutcome::Partial.to_review_outcome(),
+                Some(ReviewOutcome::Partial)
+            );
+            assert_eq!(
+                SessionOutcome::Fail.to_review_outcome(),
+                Some(ReviewOutcome::Fail)
+            );
             assert_eq!(SessionOutcome::Abandoned.to_review_outcome(), None);
         }
     }
@@ -820,14 +858,23 @@ mod tests {
 
         #[test]
         fn from_str_valid_inputs() {
-            assert_eq!(AssessmentMethod::from_str("self"), AssessmentMethod::SelfAssessed);
-            assert_eq!(AssessmentMethod::from_str("calibration"), AssessmentMethod::Calibration);
+            assert_eq!(
+                AssessmentMethod::from_str("self"),
+                AssessmentMethod::SelfAssessed
+            );
+            assert_eq!(
+                AssessmentMethod::from_str("calibration"),
+                AssessmentMethod::Calibration
+            );
             assert_eq!(AssessmentMethod::from_str("none"), AssessmentMethod::None);
         }
 
         #[test]
         fn from_str_invalid_returns_none() {
-            assert_eq!(AssessmentMethod::from_str("invalid"), AssessmentMethod::None);
+            assert_eq!(
+                AssessmentMethod::from_str("invalid"),
+                AssessmentMethod::None
+            );
         }
     }
 
@@ -846,8 +893,14 @@ mod tests {
 
         #[test]
         fn from_str_valid_inputs() {
-            assert_eq!(PlanStatus::from_str("interviewing"), Some(PlanStatus::Interviewing));
-            assert_eq!(PlanStatus::from_str("spec_ready"), Some(PlanStatus::SpecReady));
+            assert_eq!(
+                PlanStatus::from_str("interviewing"),
+                Some(PlanStatus::Interviewing)
+            );
+            assert_eq!(
+                PlanStatus::from_str("spec_ready"),
+                Some(PlanStatus::SpecReady)
+            );
             assert_eq!(PlanStatus::from_str("complete"), Some(PlanStatus::Complete));
         }
 
@@ -878,9 +931,18 @@ mod tests {
 
         #[test]
         fn from_str_valid_inputs() {
-            assert_eq!(InterviewEntryType::from_str("question"), Some(InterviewEntryType::Question));
-            assert_eq!(InterviewEntryType::from_str("answer"), Some(InterviewEntryType::Answer));
-            assert_eq!(InterviewEntryType::from_str("decision"), Some(InterviewEntryType::Decision));
+            assert_eq!(
+                InterviewEntryType::from_str("question"),
+                Some(InterviewEntryType::Question)
+            );
+            assert_eq!(
+                InterviewEntryType::from_str("answer"),
+                Some(InterviewEntryType::Answer)
+            );
+            assert_eq!(
+                InterviewEntryType::from_str("decision"),
+                Some(InterviewEntryType::Decision)
+            );
         }
 
         #[test]
@@ -902,14 +964,26 @@ mod tests {
 
         #[test]
         fn from_str_valid_inputs() {
-            assert_eq!(InterviewCategory::from_str("requirements"), Some(InterviewCategory::Requirements));
-            assert_eq!(InterviewCategory::from_str("edge_cases"), Some(InterviewCategory::EdgeCases));
-            assert_eq!(InterviewCategory::from_str("security"), Some(InterviewCategory::Security));
+            assert_eq!(
+                InterviewCategory::from_str("requirements"),
+                Some(InterviewCategory::Requirements)
+            );
+            assert_eq!(
+                InterviewCategory::from_str("edge_cases"),
+                Some(InterviewCategory::EdgeCases)
+            );
+            assert_eq!(
+                InterviewCategory::from_str("security"),
+                Some(InterviewCategory::Security)
+            );
         }
 
         #[test]
         fn from_str_unknown_returns_other() {
-            assert_eq!(InterviewCategory::from_str("unknown_category"), Some(InterviewCategory::Other));
+            assert_eq!(
+                InterviewCategory::from_str("unknown_category"),
+                Some(InterviewCategory::Other)
+            );
         }
     }
 }

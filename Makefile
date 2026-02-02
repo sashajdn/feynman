@@ -1,8 +1,10 @@
-.PHONY: build install uninstall clean test check-rust fmt lint release help
+.PHONY: build install install-skill uninstall clean test check-rust fmt lint release help
 
 BINARY_NAME := feynman
 INSTALL_PATH := /usr/local/bin
 CARGO := cargo
+SKILL_SOURCE := .claude/commands/feynman.md
+SKILL_DEST_DIR := $(or $(CLAUDE_SKILLS_CONFIG),$(HOME)/.claude/commands)
 
 # Minimum Rust version
 MIN_RUST_VERSION := 1.70.0
@@ -49,6 +51,21 @@ uninstall: ## Remove from /usr/local/bin
 	@echo "Removing $(BINARY_NAME) from $(INSTALL_PATH)..."
 	@sudo rm -f $(INSTALL_PATH)/$(BINARY_NAME)
 	@echo "Uninstalled successfully!"
+
+install-skill: ## Install Claude skill to CLAUDE_SKILLS_CONFIG (default: ~/.claude/commands)
+	@echo "Installing skill to $(SKILL_DEST_DIR)..."
+	@mkdir -p "$(SKILL_DEST_DIR)"
+	@if [ -f "$(SKILL_DEST_DIR)/feynman.md" ]; then \
+		printf "File $(SKILL_DEST_DIR)/feynman.md already exists. Overwrite? [y/N] "; \
+		read answer; \
+		case "$$answer" in \
+			[Yy]*) cp "$(SKILL_SOURCE)" "$(SKILL_DEST_DIR)/feynman.md"; echo "Skill installed.";; \
+			*) echo "Skipped.";; \
+		esac; \
+	else \
+		cp "$(SKILL_SOURCE)" "$(SKILL_DEST_DIR)/feynman.md"; \
+		echo "Skill installed to $(SKILL_DEST_DIR)/feynman.md"; \
+	fi
 
 clean: ## Clean build artifacts
 	$(CARGO) clean

@@ -1,5 +1,6 @@
 mod db;
 mod models;
+mod tui;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -57,6 +58,9 @@ enum Commands {
         #[arg(long, short)]
         notes: Option<String>,
     },
+
+    /// Launch interactive terminal UI
+    Tui,
 }
 
 #[derive(Subcommand)]
@@ -135,10 +139,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Init => {
             db.init()?;
             if cli.json {
-                println!(
-                    "{}",
-                    serde_json::to_string(&JsonOutput::<()>::ok(()))?
-                );
+                println!("{}", serde_json::to_string(&JsonOutput::<()>::ok(()))?);
             } else {
                 println!("Database initialized at: {}", db_path.display());
             }
@@ -152,7 +153,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 } else if topics.is_empty() {
                     println!("No topics found.");
                 } else {
-                    println!("{:<5} {:<40} {}", "ID", "NAME", "TAGS");
+                    println!("{:<5} {:<40} TAGS", "ID", "NAME");
                     println!("{}", "-".repeat(70));
                     for topic in topics {
                         let tags = if topic.tags.is_empty() {
@@ -207,14 +208,25 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                         if let Some(desc) = &topic.description {
                             println!("Description: {}", desc);
                         }
-                        println!("Tags: {}", if topic.tags.is_empty() { "-".to_string() } else { topic.tags.join(", ") });
+                        println!(
+                            "Tags: {}",
+                            if topic.tags.is_empty() {
+                                "-".to_string()
+                            } else {
+                                topic.tags.join(", ")
+                            }
+                        );
                         println!("Created: {}", topic.created_at);
 
                         if let Some(p) = progress {
                             println!();
                             println!("--- Progress ---");
                             println!("Mastery: {} (level {})", p.mastery_label(), p.mastery_level);
-                            println!("Reviews: {} ({:.0}% success rate)", p.times_reviewed, p.success_rate());
+                            println!(
+                                "Reviews: {} ({:.0}% success rate)",
+                                p.times_reviewed,
+                                p.success_rate()
+                            );
                             if let Some(last) = &p.last_reviewed {
                                 println!("Last reviewed: {}", last);
                             }
@@ -269,7 +281,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             } else if tags.is_empty() {
                 println!("No tags found.");
             } else {
-                println!("{:<5} {:<30} {}", "ID", "TAG", "TOPICS");
+                println!("{:<5} {:<30} TOPICS", "ID", "TAG");
                 println!("{}", "-".repeat(50));
                 for tag in tags {
                     println!("{:<5} {:<30} {}", tag.id, tag.name, tag.topic_count);
@@ -303,10 +315,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         Commands::Next { tag } => {
             if let Some(twp) = db.get_next_topic(tag.as_deref())? {
                 if cli.json {
-                    println!(
-                        "{}",
-                        serde_json::to_string(&JsonOutput::ok(&twp))?
-                    );
+                    println!("{}", serde_json::to_string(&JsonOutput::ok(&twp))?);
                 } else {
                     println!("=== Next Topic to Review ===");
                     println!();
@@ -314,19 +323,34 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(desc) = &twp.topic.description {
                         println!("Description: {}", desc);
                     }
-                    println!("Tags: {}", if twp.topic.tags.is_empty() { "-".to_string() } else { twp.topic.tags.join(", ") });
+                    println!(
+                        "Tags: {}",
+                        if twp.topic.tags.is_empty() {
+                            "-".to_string()
+                        } else {
+                            twp.topic.tags.join(", ")
+                        }
+                    );
                     println!();
-                    println!("Current mastery: {} (level {})", twp.progress.mastery_label(), twp.progress.mastery_level);
-                    println!("Reviews: {} ({:.0}% success)", twp.progress.times_reviewed, twp.progress.success_rate());
+                    println!(
+                        "Current mastery: {} (level {})",
+                        twp.progress.mastery_label(),
+                        twp.progress.mastery_level
+                    );
+                    println!(
+                        "Reviews: {} ({:.0}% success)",
+                        twp.progress.times_reviewed,
+                        twp.progress.success_rate()
+                    );
                     println!();
                     println!("After review, record outcome with:");
-                    println!("  feynman review {} --outcome <success|partial|fail>", twp.topic.id);
+                    println!(
+                        "  feynman review {} --outcome <success|partial|fail>",
+                        twp.topic.id
+                    );
                 }
             } else if cli.json {
-                println!(
-                    "{}",
-                    serde_json::to_string(&JsonOutput::<()>::ok(()))?
-                );
+                println!("{}", serde_json::to_string(&JsonOutput::<()>::ok(()))?);
             } else {
                 println!("No topics to review. Add some topics first!");
             }
@@ -357,6 +381,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+        }
+
+        Commands::Tui => {
+            tui::run(db)?;
         }
     }
 
@@ -574,8 +602,8 @@ mod tests {
 
         #[test]
         fn parse_topic_tag() {
-            let cli =
-                Cli::try_parse_from(["feynman", "topic", "tag", "3", "--tags", "new,tags"]).unwrap();
+            let cli = Cli::try_parse_from(["feynman", "topic", "tag", "3", "--tags", "new,tags"])
+                .unwrap();
             match cli.command {
                 Commands::Topic(TopicCommands::Tag { id, tags }) => {
                     assert_eq!(id, 3);
@@ -657,9 +685,8 @@ mod tests {
 
         #[test]
         fn parse_review_short_flags() {
-            let cli =
-                Cli::try_parse_from(["feynman", "review", "1", "-o", "fail", "-n", "notes"])
-                    .unwrap();
+            let cli = Cli::try_parse_from(["feynman", "review", "1", "-o", "fail", "-n", "notes"])
+                .unwrap();
             match cli.command {
                 Commands::Review { id, outcome, notes } => {
                     assert_eq!(id, 1);

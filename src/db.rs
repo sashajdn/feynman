@@ -1,11 +1,14 @@
+// Many methods are public API for the Claude skill integration but not used by CLI/TUI yet
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, Result};
 use std::path::Path;
 
 use crate::models::{
-    AssessmentMethod, InterviewCategory, InterviewEntry, InterviewEntryType, LearningSession,
-    Plan, PlanStatus, Progress, ReviewOutcome, SessionGap, SessionOutcome, SessionType,
-    SkillAssessment, SkillLevel, Tag, Topic, TopicWithProgress,
+    AssessmentMethod, InterviewCategory, InterviewEntry, InterviewEntryType, LearningSession, Plan,
+    PlanStatus, Progress, ReviewOutcome, SessionGap, SessionOutcome, SessionType, SkillAssessment,
+    SkillLevel, Tag, Topic, TopicWithProgress,
 };
 
 pub struct Database {
@@ -198,9 +201,9 @@ impl Database {
     }
 
     pub fn get_topic(&self, id: i64) -> Result<Option<Topic>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, name, description, created_at, updated_at FROM topics WHERE id = ?1")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, description, created_at, updated_at FROM topics WHERE id = ?1",
+        )?;
 
         let topic = stmt.query_row(params![id], |row| {
             Ok(Topic {
@@ -301,11 +304,11 @@ impl Database {
     // Tag operations
     fn get_or_create_tag(&self, name: &str) -> Result<i64> {
         // Try to get existing tag
-        let existing: Result<i64> =
-            self.conn
-                .query_row("SELECT id FROM tags WHERE name = ?1", params![name], |row| {
-                    row.get(0)
-                });
+        let existing: Result<i64> = self.conn.query_row(
+            "SELECT id FROM tags WHERE name = ?1",
+            params![name],
+            |row| row.get(0),
+        );
 
         match existing {
             Ok(id) => Ok(id),
@@ -410,9 +413,9 @@ impl Database {
         )?;
 
         // Get current progress
-        let progress = self.get_progress(topic_id)?.ok_or_else(|| {
-            rusqlite::Error::QueryReturnedNoRows
-        })?;
+        let progress = self
+            .get_progress(topic_id)?
+            .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
 
         // Calculate new mastery level and next review
         let (new_mastery, days_until_next) = match outcome {
@@ -533,28 +536,30 @@ impl Database {
             JOIN progress p ON t.id = p.topic_id
         "#;
 
-        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(tag) = tag_filter {
-            let q = format!(
-                r#"{}
+        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) =
+            if let Some(tag) = tag_filter {
+                let q = format!(
+                    r#"{}
                 JOIN topic_tags tt ON t.id = tt.topic_id
                 JOIN tags tg ON tt.tag_id = tg.id
                 WHERE tg.name = ?1
                 ORDER BY p.next_review ASC, p.mastery_level ASC
                 "#,
-                base_query
-            );
-            (q, vec![Box::new(tag.to_string())])
-        } else {
-            let q = format!(
-                "{} ORDER BY p.next_review ASC, p.mastery_level ASC",
-                base_query
-            );
-            (q, vec![])
-        };
+                    base_query
+                );
+                (q, vec![Box::new(tag.to_string())])
+            } else {
+                let q = format!(
+                    "{} ORDER BY p.next_review ASC, p.mastery_level ASC",
+                    base_query
+                );
+                (q, vec![])
+            };
 
         let mut stmt = self.conn.prepare(&query)?;
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|b| b.as_ref()).collect();
 
         let rows = stmt.query_map(params_refs.as_slice(), |row| {
             let skill_level_int: i32 = row.get(13)?;
@@ -605,7 +610,12 @@ impl Database {
             INSERT INTO learning_sessions (topic_id, session_type, started_at, skill_level_at_start)
             VALUES (?1, ?2, ?3, ?4)
             "#,
-            params![topic_id, session_type.as_str(), now.to_rfc3339(), skill_at_start],
+            params![
+                topic_id,
+                session_type.as_str(),
+                now.to_rfc3339(),
+                skill_at_start
+            ],
         )?;
         Ok(self.conn.last_insert_rowid())
     }
@@ -624,7 +634,13 @@ impl Database {
             SET ended_at = ?1, outcome = ?2, summary = ?3, notes = ?4
             WHERE id = ?5
             "#,
-            params![now.to_rfc3339(), outcome.as_str(), summary, notes, session_id],
+            params![
+                now.to_rfc3339(),
+                outcome.as_str(),
+                summary,
+                notes,
+                session_id
+            ],
         )?;
         Ok(())
     }
@@ -645,7 +661,8 @@ impl Database {
             Ok(LearningSession {
                 id: row.get(0)?,
                 topic_id: row.get(1)?,
-                session_type: SessionType::from_str(&session_type_str).unwrap_or(SessionType::Feynman),
+                session_type: SessionType::from_str(&session_type_str)
+                    .unwrap_or(SessionType::Feynman),
                 started_at: row.get(3)?,
                 ended_at: row.get(4)?,
                 skill_level_at_start: row.get(5)?,
@@ -663,31 +680,35 @@ impl Database {
     }
 
     pub fn list_sessions(&self, topic_id: Option<i64>) -> Result<Vec<LearningSession>> {
-        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(tid) = topic_id {
-            (
-                r#"
+        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) =
+            if let Some(tid) = topic_id {
+                (
+                    r#"
                 SELECT id, topic_id, session_type, started_at, ended_at,
                        skill_level_at_start, outcome, summary, notes
                 FROM learning_sessions
                 WHERE topic_id = ?1
                 ORDER BY started_at DESC
-                "#.to_string(),
-                vec![Box::new(tid)],
-            )
-        } else {
-            (
-                r#"
+                "#
+                    .to_string(),
+                    vec![Box::new(tid)],
+                )
+            } else {
+                (
+                    r#"
                 SELECT id, topic_id, session_type, started_at, ended_at,
                        skill_level_at_start, outcome, summary, notes
                 FROM learning_sessions
                 ORDER BY started_at DESC
-                "#.to_string(),
-                vec![],
-            )
-        };
+                "#
+                    .to_string(),
+                    vec![],
+                )
+            };
 
         let mut stmt = self.conn.prepare(&query)?;
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|b| b.as_ref()).collect();
 
         let rows = stmt.query_map(params_refs.as_slice(), |row| {
             let session_type_str: String = row.get(2)?;
@@ -695,7 +716,8 @@ impl Database {
             Ok(LearningSession {
                 id: row.get(0)?,
                 topic_id: row.get(1)?,
-                session_type: SessionType::from_str(&session_type_str).unwrap_or(SessionType::Feynman),
+                session_type: SessionType::from_str(&session_type_str)
+                    .unwrap_or(SessionType::Feynman),
                 started_at: row.get(3)?,
                 ended_at: row.get(4)?,
                 skill_level_at_start: row.get(5)?,
@@ -802,7 +824,12 @@ impl Database {
             SET skill_level = ?1, assessment_method = ?2, last_assessed = ?3
             WHERE topic_id = ?4
             "#,
-            params![new_level.as_i32(), method.as_str(), now.to_rfc3339(), topic_id],
+            params![
+                new_level.as_i32(),
+                method.as_str(),
+                now.to_rfc3339(),
+                topic_id
+            ],
         )?;
 
         Ok(())
@@ -878,7 +905,9 @@ impl Database {
     }
 
     pub fn list_plans(&self, status_filter: Option<PlanStatus>) -> Result<Vec<Plan>> {
-        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(status) = status_filter {
+        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(status) =
+            status_filter
+        {
             (
                 r#"
                 SELECT id, title, initial_description, status, engineer_level, spec_file_path, created_at, updated_at
@@ -900,7 +929,8 @@ impl Database {
         };
 
         let mut stmt = self.conn.prepare(&query)?;
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|b| b.as_ref()).collect();
 
         let rows = stmt.query_map(params_refs.as_slice(), |row| {
             let status_str: String = row.get(3)?;
@@ -947,7 +977,9 @@ impl Database {
     }
 
     pub fn delete_plan(&self, plan_id: i64) -> Result<bool> {
-        let rows = self.conn.execute("DELETE FROM plans WHERE id = ?1", params![plan_id])?;
+        let rows = self
+            .conn
+            .execute("DELETE FROM plans WHERE id = ?1", params![plan_id])?;
         Ok(rows > 0)
     }
 
@@ -965,7 +997,13 @@ impl Database {
             INSERT INTO plan_interview_entries (plan_id, entry_type, content, category, created_at)
             VALUES (?1, ?2, ?3, ?4, ?5)
             "#,
-            params![plan_id, entry_type.as_str(), content, category.as_str(), now.to_rfc3339()],
+            params![
+                plan_id,
+                entry_type.as_str(),
+                content,
+                category.as_str(),
+                now.to_rfc3339()
+            ],
         )?;
 
         // Update plan's updated_at
@@ -993,9 +1031,11 @@ impl Database {
             Ok(InterviewEntry {
                 id: row.get(0)?,
                 plan_id: row.get(1)?,
-                entry_type: InterviewEntryType::from_str(&entry_type_str).unwrap_or(InterviewEntryType::Note),
+                entry_type: InterviewEntryType::from_str(&entry_type_str)
+                    .unwrap_or(InterviewEntryType::Note),
                 content: row.get(3)?,
-                category: InterviewCategory::from_str(&category_str).unwrap_or(InterviewCategory::Other),
+                category: InterviewCategory::from_str(&category_str)
+                    .unwrap_or(InterviewCategory::Other),
                 created_at: row.get(5)?,
             })
         })?;
@@ -1003,7 +1043,11 @@ impl Database {
         rows.collect()
     }
 
-    pub fn get_interview_entries_by_category(&self, plan_id: i64, category: InterviewCategory) -> Result<Vec<InterviewEntry>> {
+    pub fn get_interview_entries_by_category(
+        &self,
+        plan_id: i64,
+        category: InterviewCategory,
+    ) -> Result<Vec<InterviewEntry>> {
         let mut stmt = self.conn.prepare(
             r#"
             SELECT id, plan_id, entry_type, content, category, created_at
@@ -1019,11 +1063,175 @@ impl Database {
             Ok(InterviewEntry {
                 id: row.get(0)?,
                 plan_id: row.get(1)?,
-                entry_type: InterviewEntryType::from_str(&entry_type_str).unwrap_or(InterviewEntryType::Note),
+                entry_type: InterviewEntryType::from_str(&entry_type_str)
+                    .unwrap_or(InterviewEntryType::Note),
                 content: row.get(3)?,
-                category: InterviewCategory::from_str(&category_str).unwrap_or(InterviewCategory::Other),
+                category: InterviewCategory::from_str(&category_str)
+                    .unwrap_or(InterviewCategory::Other),
                 created_at: row.get(5)?,
             })
+        })?;
+
+        rows.collect()
+    }
+
+    // TUI helper methods
+    pub fn get_topics_with_progress(
+        &self,
+        tag_filter: Option<&str>,
+    ) -> Result<Vec<TopicWithProgress>> {
+        let base_query = r#"
+            SELECT t.id, t.name, t.description, t.created_at, t.updated_at,
+                   p.id, p.topic_id, p.mastery_level, p.times_reviewed, p.times_succeeded,
+                   p.last_reviewed, p.next_review, p.notes, p.skill_level, p.assessment_method, p.last_assessed
+            FROM topics t
+            JOIN progress p ON t.id = p.topic_id
+        "#;
+
+        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) =
+            if let Some(tag) = tag_filter {
+                let q = format!(
+                    r#"{}
+                JOIN topic_tags tt ON t.id = tt.topic_id
+                JOIN tags tg ON tt.tag_id = tg.id
+                WHERE tg.name = ?1
+                ORDER BY t.name
+                "#,
+                    base_query
+                );
+                (q, vec![Box::new(tag.to_string())])
+            } else {
+                let q = format!("{} ORDER BY t.name", base_query);
+                (q, vec![])
+            };
+
+        let mut stmt = self.conn.prepare(&query)?;
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|b| b.as_ref()).collect();
+
+        let rows = stmt.query_map(params_refs.as_slice(), |row| {
+            let skill_level_int: i32 = row.get(13)?;
+            let assessment_str: String = row.get(14)?;
+            Ok(TopicWithProgress {
+                topic: Topic {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                    tags: vec![],
+                },
+                progress: Progress {
+                    id: row.get(5)?,
+                    topic_id: row.get(6)?,
+                    mastery_level: row.get(7)?,
+                    times_reviewed: row.get(8)?,
+                    times_succeeded: row.get(9)?,
+                    last_reviewed: row.get(10)?,
+                    next_review: row.get(11)?,
+                    notes: row.get(12)?,
+                    skill_level: SkillLevel::from_i32(skill_level_int),
+                    assessment_method: AssessmentMethod::from_str(&assessment_str),
+                    last_assessed: row.get(15)?,
+                },
+            })
+        })?;
+        let topics = rows.collect::<Result<Vec<_>>>()?;
+
+        // Fill in tags
+        let mut result = topics;
+        for twp in &mut result {
+            twp.topic.tags = self.get_topic_tags(twp.topic.id)?;
+        }
+
+        Ok(result)
+    }
+
+    pub fn get_due_topics_limited(&self, limit: usize) -> Result<Vec<TopicWithProgress>> {
+        let query = r#"
+            SELECT t.id, t.name, t.description, t.created_at, t.updated_at,
+                   p.id, p.topic_id, p.mastery_level, p.times_reviewed, p.times_succeeded,
+                   p.last_reviewed, p.next_review, p.notes, p.skill_level, p.assessment_method, p.last_assessed
+            FROM topics t
+            JOIN progress p ON t.id = p.topic_id
+            WHERE p.next_review <= datetime('now')
+            ORDER BY p.next_review ASC, p.mastery_level ASC
+            LIMIT ?1
+        "#;
+
+        let mut stmt = self.conn.prepare(query)?;
+        let rows = stmt.query_map(params![limit as i64], |row| {
+            let skill_level_int: i32 = row.get(13)?;
+            let assessment_str: String = row.get(14)?;
+            Ok(TopicWithProgress {
+                topic: Topic {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    created_at: row.get(3)?,
+                    updated_at: row.get(4)?,
+                    tags: vec![],
+                },
+                progress: Progress {
+                    id: row.get(5)?,
+                    topic_id: row.get(6)?,
+                    mastery_level: row.get(7)?,
+                    times_reviewed: row.get(8)?,
+                    times_succeeded: row.get(9)?,
+                    last_reviewed: row.get(10)?,
+                    next_review: row.get(11)?,
+                    notes: row.get(12)?,
+                    skill_level: SkillLevel::from_i32(skill_level_int),
+                    assessment_method: AssessmentMethod::from_str(&assessment_str),
+                    last_assessed: row.get(15)?,
+                },
+            })
+        })?;
+        let topics = rows.collect::<Result<Vec<_>>>()?;
+
+        // Fill in tags
+        let mut result = topics;
+        for twp in &mut result {
+            twp.topic.tags = self.get_topic_tags(twp.topic.id)?;
+        }
+
+        Ok(result)
+    }
+
+    pub fn get_recent_sessions_with_topics(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<(LearningSession, String)>> {
+        let query = r#"
+            SELECT ls.id, ls.topic_id, ls.session_type, ls.started_at, ls.ended_at,
+                   ls.skill_level_at_start, ls.outcome, ls.summary, ls.notes,
+                   t.name
+            FROM learning_sessions ls
+            JOIN topics t ON ls.topic_id = t.id
+            ORDER BY ls.started_at DESC
+            LIMIT ?1
+        "#;
+
+        let mut stmt = self.conn.prepare(query)?;
+        let rows = stmt.query_map(params![limit as i64], |row| {
+            let session_type_str: String = row.get(2)?;
+            let outcome_str: Option<String> = row.get(6)?;
+            let topic_name: String = row.get(9)?;
+            Ok((
+                LearningSession {
+                    id: row.get(0)?,
+                    topic_id: row.get(1)?,
+                    session_type: SessionType::from_str(&session_type_str)
+                        .unwrap_or(SessionType::Feynman),
+                    started_at: row.get(3)?,
+                    ended_at: row.get(4)?,
+                    skill_level_at_start: row.get(5)?,
+                    outcome: outcome_str.and_then(|s| SessionOutcome::from_str(&s)),
+                    summary: row.get(7)?,
+                    notes: row.get(8)?,
+                },
+                topic_name,
+            ))
         })?;
 
         rows.collect()
@@ -1034,9 +1242,9 @@ impl Database {
             .conn
             .query_row("SELECT COUNT(*) FROM topics", [], |row| row.get(0))?;
 
-        let total_reviews: i64 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM review_history", [], |row| row.get(0))?;
+        let total_reviews: i64 =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM review_history", [], |row| row.get(0))?;
 
         let mastered: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM progress WHERE mastery_level >= 4",
@@ -1157,7 +1365,10 @@ mod tests {
                 .unwrap();
 
             let topic = db.get_topic(id).unwrap().unwrap();
-            assert_eq!(topic.description, Some("Learn the fundamentals".to_string()));
+            assert_eq!(
+                topic.description,
+                Some("Learn the fundamentals".to_string())
+            );
         }
 
         #[test]
@@ -1288,9 +1499,7 @@ mod tests {
         #[test]
         fn update_topic_tags() {
             let db = setup_db();
-            let id = db
-                .add_topic("Test", None, &["old".to_string()])
-                .unwrap();
+            let id = db.add_topic("Test", None, &["old".to_string()]).unwrap();
 
             db.update_topic_tags(id, &["new1".to_string(), "new2".to_string()])
                 .unwrap();
@@ -1305,9 +1514,7 @@ mod tests {
         #[test]
         fn update_topic_tags_to_empty() {
             let db = setup_db();
-            let id = db
-                .add_topic("Test", None, &["tag1".to_string()])
-                .unwrap();
+            let id = db.add_topic("Test", None, &["tag1".to_string()]).unwrap();
 
             db.update_topic_tags(id, &[]).unwrap();
 
@@ -1708,8 +1915,13 @@ mod tests {
             let topic_id = db.add_topic("Test", None, &[]).unwrap();
 
             // Set skill level first
-            db.update_skill_level(topic_id, SkillLevel::Intermediate, AssessmentMethod::SelfAssessed, None)
-                .unwrap();
+            db.update_skill_level(
+                topic_id,
+                SkillLevel::Intermediate,
+                AssessmentMethod::SelfAssessed,
+                None,
+            )
+            .unwrap();
 
             let session_id = db.start_session(topic_id, SessionType::Socratic).unwrap();
             let session = db.get_session(session_id).unwrap().unwrap();
@@ -1828,8 +2040,13 @@ mod tests {
             let db = setup_db();
             let topic_id = db.add_topic("Test", None, &[]).unwrap();
 
-            db.update_skill_level(topic_id, SkillLevel::Intermediate, AssessmentMethod::SelfAssessed, None)
-                .unwrap();
+            db.update_skill_level(
+                topic_id,
+                SkillLevel::Intermediate,
+                AssessmentMethod::SelfAssessed,
+                None,
+            )
+            .unwrap();
 
             let progress = db.get_progress(topic_id).unwrap().unwrap();
             assert_eq!(progress.skill_level, SkillLevel::Intermediate);
@@ -1842,11 +2059,21 @@ mod tests {
             let db = setup_db();
             let topic_id = db.add_topic("Test", None, &[]).unwrap();
 
-            db.update_skill_level(topic_id, SkillLevel::Beginner, AssessmentMethod::Calibration, Some("Initial assessment"))
-                .unwrap();
+            db.update_skill_level(
+                topic_id,
+                SkillLevel::Beginner,
+                AssessmentMethod::Calibration,
+                Some("Initial assessment"),
+            )
+            .unwrap();
 
-            db.update_skill_level(topic_id, SkillLevel::Intermediate, AssessmentMethod::Calibration, Some("Improved"))
-                .unwrap();
+            db.update_skill_level(
+                topic_id,
+                SkillLevel::Intermediate,
+                AssessmentMethod::Calibration,
+                Some("Improved"),
+            )
+            .unwrap();
 
             let assessments = db.get_skill_assessments(topic_id).unwrap();
             assert_eq!(assessments.len(), 2);
@@ -1928,7 +2155,8 @@ mod tests {
             let db = setup_db();
             let plan_id = db.create_plan("Plan", "Desc").unwrap();
 
-            db.update_plan_status(plan_id, PlanStatus::SpecReady).unwrap();
+            db.update_plan_status(plan_id, PlanStatus::SpecReady)
+                .unwrap();
 
             let plan = db.get_plan(plan_id).unwrap().unwrap();
             assert_eq!(plan.status, PlanStatus::SpecReady);
@@ -1950,7 +2178,8 @@ mod tests {
             let db = setup_db();
             let plan_id = db.create_plan("Plan", "Desc").unwrap();
 
-            db.update_plan_spec_path(plan_id, "/path/to/spec.md").unwrap();
+            db.update_plan_spec_path(plan_id, "/path/to/spec.md")
+                .unwrap();
 
             let plan = db.get_plan(plan_id).unwrap().unwrap();
             assert_eq!(plan.spec_file_path, Some("/path/to/spec.md".to_string()));
@@ -1985,12 +2214,14 @@ mod tests {
             let db = setup_db();
             let plan_id = db.create_plan("Plan", "Desc").unwrap();
 
-            let entry_id = db.add_interview_entry(
-                plan_id,
-                InterviewEntryType::Question,
-                "What is the scope?",
-                InterviewCategory::Scope,
-            ).unwrap();
+            let entry_id = db
+                .add_interview_entry(
+                    plan_id,
+                    InterviewEntryType::Question,
+                    "What is the scope?",
+                    InterviewCategory::Scope,
+                )
+                .unwrap();
 
             assert!(entry_id > 0);
         }
@@ -2000,9 +2231,27 @@ mod tests {
             let db = setup_db();
             let plan_id = db.create_plan("Plan", "Desc").unwrap();
 
-            db.add_interview_entry(plan_id, InterviewEntryType::Question, "Q1", InterviewCategory::Scope).unwrap();
-            db.add_interview_entry(plan_id, InterviewEntryType::Answer, "A1", InterviewCategory::Scope).unwrap();
-            db.add_interview_entry(plan_id, InterviewEntryType::Question, "Q2", InterviewCategory::Security).unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Question,
+                "Q1",
+                InterviewCategory::Scope,
+            )
+            .unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Answer,
+                "A1",
+                InterviewCategory::Scope,
+            )
+            .unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Question,
+                "Q2",
+                InterviewCategory::Security,
+            )
+            .unwrap();
 
             let entries = db.get_interview_entries(plan_id).unwrap();
             assert_eq!(entries.len(), 3);
@@ -2013,8 +2262,20 @@ mod tests {
             let db = setup_db();
             let plan_id = db.create_plan("Plan", "Desc").unwrap();
 
-            db.add_interview_entry(plan_id, InterviewEntryType::Question, "First", InterviewCategory::Scope).unwrap();
-            db.add_interview_entry(plan_id, InterviewEntryType::Answer, "Second", InterviewCategory::Scope).unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Question,
+                "First",
+                InterviewCategory::Scope,
+            )
+            .unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Answer,
+                "Second",
+                InterviewCategory::Scope,
+            )
+            .unwrap();
 
             let entries = db.get_interview_entries(plan_id).unwrap();
             assert_eq!(entries[0].content, "First");
@@ -2026,10 +2287,24 @@ mod tests {
             let db = setup_db();
             let plan_id = db.create_plan("Plan", "Desc").unwrap();
 
-            db.add_interview_entry(plan_id, InterviewEntryType::Question, "Security Q", InterviewCategory::Security).unwrap();
-            db.add_interview_entry(plan_id, InterviewEntryType::Question, "Scope Q", InterviewCategory::Scope).unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Question,
+                "Security Q",
+                InterviewCategory::Security,
+            )
+            .unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Question,
+                "Scope Q",
+                InterviewCategory::Scope,
+            )
+            .unwrap();
 
-            let security = db.get_interview_entries_by_category(plan_id, InterviewCategory::Security).unwrap();
+            let security = db
+                .get_interview_entries_by_category(plan_id, InterviewCategory::Security)
+                .unwrap();
             assert_eq!(security.len(), 1);
             assert_eq!(security[0].content, "Security Q");
         }
@@ -2039,7 +2314,13 @@ mod tests {
             let db = setup_db();
             let plan_id = db.create_plan("Plan", "Desc").unwrap();
 
-            db.add_interview_entry(plan_id, InterviewEntryType::Question, "Q1", InterviewCategory::Scope).unwrap();
+            db.add_interview_entry(
+                plan_id,
+                InterviewEntryType::Question,
+                "Q1",
+                InterviewCategory::Scope,
+            )
+            .unwrap();
 
             db.delete_plan(plan_id).unwrap();
 

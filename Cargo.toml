@@ -16,6 +16,8 @@ chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 dirs = "5.0"
 thiserror = "1.0"
+ratatui = "0.29"
+crossterm = "0.28"
 
 [[bin]]
 name = "feynman"

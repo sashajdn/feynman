@@ -23,6 +23,7 @@ Combined with **stochastic spaced repetition**, this tool helps you:
 - **Progress Tracking**: Mastery levels (0-5), success rates, review history
 - **Stochastic Selection**: Weighted random selection favoring overdue/weak topics
 - **Spaced Repetition**: Automatic scheduling based on performance
+- **Terminal UI**: Interactive vim-style TUI for browsing topics and plans
 - **Claude Integration**: AI-powered Feynman technique sessions
 - **JSON Output**: For scripting and integration
 
@@ -48,11 +49,19 @@ This builds an optimized release binary and installs it to `/usr/local/bin/feynm
 feynman init
 ```
 
-Database is stored at `~/.config/feynman/feynman.db` by default.
+Database is stored in the platform config directory by default (see Environment Variables).
 
-Override with:
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FEYNMAN_DB` | Path to SQLite database | Platform config dir (e.g., `~/.config/feynman/` on Linux) |
+| `CLAUDE_SKILLS_CONFIG` | Directory for Claude skill installation | `~/.claude/commands` |
+
+Example:
 ```bash
 export FEYNMAN_DB=/path/to/your/feynman.db
+export CLAUDE_SKILLS_CONFIG=~/my-claude-skills
 ```
 
 ## Usage
@@ -119,6 +128,37 @@ feynman --json next
 feynman --json stats
 ```
 
+### Terminal UI
+
+Launch the interactive TUI to browse topics, plans, and progress:
+
+```bash
+feynman tui
+```
+
+#### Views
+
+| View | Description |
+|------|-------------|
+| Dashboard | Stats, due topics, recent sessions |
+| Topics | Browse all topics with mastery and skill levels |
+| Topic Detail | Progress, gaps, session history |
+| Plans | Browse interview plans |
+| Plan Detail | Interview entries by category |
+
+#### Keybindings (Vim-style)
+
+| Key | Action |
+|-----|--------|
+| `h` / `l` | Navigate views (left/right) |
+| `j` / `k` | Navigate list items (down/up) |
+| `g` / `G` | Jump to top/bottom of list |
+| `Enter` or `l` | Open detail view |
+| `Esc` or `h` | Back / Clear filter |
+| `/` | Filter topics by tag |
+| `Ctrl+r` | Refresh data |
+| `q` | Quit |
+
 ## Mastery Levels
 
 | Level | Label       | Next Review |
@@ -142,16 +182,45 @@ This prevents getting stuck reviewing the same topics and ensures comprehensive 
 
 ## Claude Skill Integration
 
-The Claude skill (`.claude/commands/feynman.md`) enables AI-powered Feynman technique sessions:
+Install the Claude skill:
 
-1. User invokes `/feynman` or asks to learn/review
-2. Claude retrieves next topic via CLI
-3. Claude conducts a Feynman teaching session:
-   - Asks user to explain the topic simply
-   - Identifies gaps in understanding
-   - Provides targeted explanations
-   - Has user re-explain
-4. Claude records the outcome
+```bash
+make install-skill
+```
+
+This installs to `$CLAUDE_SKILLS_CONFIG` (default: `~/.claude/commands`). Prompts before overwriting existing files.
+
+### Three Modes
+
+| Mode | Trigger | Who Leads | Purpose |
+|------|---------|-----------|---------|
+| **Feynman** | "check my understanding of X" | User explains | Identify knowledge gaps through teaching |
+| **Socratic** | "teach me about X" | Claude asks questions | Guide discovery through questioning |
+| **Plan** | "plan X" / "spec X" | Claude interviews | Extract requirements, produce design doc |
+
+### Feynman Mode
+1. User invokes `/feynman` or asks to check understanding
+2. Claude asks user to explain the topic simply
+3. Claude probes gaps and misconceptions
+4. User re-explains until understanding is solid
+5. Claude records the outcome
+
+### Socratic Mode
+1. User asks to learn about a topic
+2. Claude assesses skill level (asks or infers)
+3. Claude guides discovery through questions only (no lecturing)
+4. Records outcome with gaps identified
+
+### Plan Mode (Technical Interview)
+1. User describes a fuzzy task ("plan X", "spec X")
+2. Claude conducts a structured interview:
+   - Problem & context
+   - Scope & requirements
+   - Technical design
+   - Edge cases & failure modes
+   - Security & operations
+   - Definition of done
+3. Claude generates a markdown spec at user-specified path
 
 ## Tag Taxonomy
 
@@ -190,7 +259,16 @@ feynman/
 ├── src/
 │   ├── main.rs             # CLI entry point
 │   ├── db.rs               # SQLite operations
-│   └── models.rs           # Data structures
+│   ├── models.rs           # Data structures
+│   └── tui/                # Terminal UI
+│       ├── mod.rs          # App state, event loop
+│       ├── ui.rs           # Layout and rendering
+│       └── widgets/        # View components
+│           ├── dashboard.rs
+│           ├── topics.rs
+│           ├── topic_detail.rs
+│           ├── plans.rs
+│           └── plan_detail.rs
 └── .claude/
     └── commands/
         └── feynman.md      # Claude skill definition
